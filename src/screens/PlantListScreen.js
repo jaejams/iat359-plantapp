@@ -1,66 +1,92 @@
-import { useState, useEffect, useCallback } from "react"; // Import useEffect
+import { useState, useEffect, useCallback } from "react"; // useState = Reat hook for adding & managing state in functional components. useCallback = hook to memoize a callback function, i.e. cache the result of a function. The result of a function will only be recreated if one of its dependencies change.  
 import { View, Text, TouchableOpacity, FlatList, StyleSheet } from "react-native";
-import { collection, getDocs, query, where } from "firebase/firestore"; // Import Firestore methods
+import { collection, getDocs, query, where } from "firebase/firestore"; // methods from the Firebase, which is noSQL, document-oriented database. Collection = gets a collection reference, getDocs = fetches documents from the database, query = constructs a query, where = adds filtering conditions
 import { db } from "../firebaseConfig.js";
-import { useRoute, useFocusEffect } from "@react-navigation/native";
+import { useRoute, useFocusEffect } from "@react-navigation/native"; // useRoute = access the route prop, key props provided to every screen component. useFocusEffect = run function every time the screen is in focus. 
 
 
 export default function PlantListScreen({ navigation }) {
-    const [plants, setPlants] = useState([]);
+    const [plants, setPlants] = useState([]); // initializes the plants state variable as an array []. setPlants is the function to update it. 
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null); // Added state for error handling
-    const route = useRoute();
+    const [error, setError] = useState(null);
+    const route = useRoute(); // hook to access the route object. I'll use route.params object to retrieve the passes parameters. 
+    const [headerText, setHeaderText] = useState("My Plant Collection"); // headerText state variable initialized with the current state 'My Plant Collection'. 
 
     // These filter parameters will be passed via navigation
-    // The query is structured as a regular JavaScript object containing parameters
     const filterParams = route.params?.filters; // filter objects are passed through 'filters' parameter
 
-    function formatDate(date) {
+    function formatDate(date) { 
+        // reference: https://www.geeksforgeeks.org/javascript/how-to-get-month-and-date-of-javascript-in-two-digit-format/
         if (!date) return "No date data available";
-        return date.toLocaleString(); // Simple readable format
+
+        // If Firestore timestamp, then convert to a js date object. 
+        if (date.toDate && typeof date.toDate === "function") {
+            date = date.toDate();
+        }
+
+        // If string or number, then convert to a js date object. 
+        if (!(date instanceof Date)) {
+            date = new Date(date);
+        }
+
+        if (isNaN(date)) return "Invalid"; //check if the date is an invalid date using isNan() function as per https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isNaN
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+
+        return `${year}-${month}-${day} ${hours}:${minutes}`;
     }
-    useFocusEffect(
+    useFocusEffect( // trigger the data to fetch every time the screen is in focus. 
         useCallback(() => {
             // This code runs every time the screen comes into focus
-            console.log("In PlantListScreen now--received filter parameters:", filterParams);
+            console.log("In PlantListScreen now: received filter parameters:", filterParams);
             fetchPlants();
 
         }, [filterParams]) // this is dependency array, fetchPlants depends on 'filterParams'. If params change, callback's redefined. 
 
     );
 
-    //Function to retrieve all plants or filtered plants from Firestore.
-    // This uses async/await, which is necessary for interacting with external APIs/services. 
+    // Function to retrieve all plants or filtered plants from Firestore.
+    // async functions = used to handle operations that take some time to complete; the program will continue running other operations while waiting for async tasks. Data fetching will take some time, so async function's used. 
+    // This uses async/await. Await = used to pause execution of the async function until the result returns (i.e. promise resolves). 
     async function fetchPlants() {
         setIsLoading(true);
         setError(null);
-        try {
-            let q = collection(db, "plants"); // Start with the base collection reference
+
+        // {try...catch} in Javascript is used to handle errors in code. "Try" a block of code, then "catch" any errors. 
+        try { // In Firestore, there's no tables or rows. Instead, data's stored in documents, which must be stored in collections. Each document contains a set of key-value pairs. 
+            let q = collection(db, "plants"); // Start query reference 'q' to the base collection named "plants". "plants" is in the Firestore dababase 'db'. 
             let isFiltered = false;
 
             // Check if filter parameters exist and apply them
             if (filterParams) {
                 const whereArr = [];
-                // Apply filters only if they are present in the passed object
-                if (filterParams.name) whereArr.push(where("name", "==", filterParams.name));
-                if (filterParams.type) whereArr.push(where("type", "==", filterParams.type));
-                if (filterParams.location) whereArr.push(where("location", "==", filterParams.location));
+                // Apply filters only if they exist in the passed object
+                if (filterParams.name) whereArr.push(where("nameLower", "==", filterParams.name)); // if 'name' filter exists, then push 'where("name", "==", filterParams.name)' to whereArr. 
+                if (filterParams.type) whereArr.push(where("typeLower", "==", filterParams.type));
+                if (filterParams.location) whereArr.push(where("locationLower", "==", filterParams.location));
 
                 // If any filters were added, create the query
                 if (whereArr.length > 0) {
-                    q = query(collection(db, "plants"), ...whereArr);
+                    q = query(collection(db, "plants"), ...whereArr); // combine collection(db, 'plants') i.e. base collection reference and spread array '...whereArr'
                     isFiltered = true;
                 }
             }
 
             if (isFiltered) {
                 console.log("PlantListScreen: Executing FILTERED query.");
+                setHeaderText("Filtered Search Results"); // if the list's filtered, set the header text to this. 
             } else {
                 console.log("PlantListScreen: Executing ALL plants query (no filters provided).");
+                setHeaderText("All Plant Collections")
             }
 
             // The process uses asynchronous functions to handle an operation that takes some time to complete
-            const querySnapshot = await getDocs(q); // Pause until data is fetched 
+            const querySnapshot = await getDocs(q); // await = pauses fetchPlants until the promise from getDocs is returned
 
             if (querySnapshot.empty) {
                 console.log("No matching plants found.");
@@ -72,30 +98,34 @@ export default function PlantListScreen({ navigation }) {
 
             const fetchedPlants = [];
 
+            // iterates over the results. forEach method processes each document returned by Firestore. 
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
+
+                const dateValue = data.dateAdded
+                    ? (typeof data.dateAdded.toDate === 'function' ? data.dateAdded.toDate() : data.dateAdded)
+                    : null;
                 fetchedPlants.push({
                     id: doc.id,
                     name: data.name,
                     type: data.type,
                     location: data.location,
-                    dateAdded: data.dateAdded ? data.dateAdded.toDate() : null,  // converting firestore timestamp
+                    dateAdded: dateValue,
+                    // extracts Firestore timestamp from Firestore document, then converts it into a Javascript Date object. 
                 });
             });
 
             console.log(`PlantListScreen: Successfully fetched ${fetchedPlants.length} plants.`);
 
 
-            setPlants(fetchedPlants);
-            setIsLoading(false);
+            setPlants(fetchedPlants); // update setPlants with the fetched data 
+            setIsLoading(false); // turn off setIsLoading. isLoading = state variable used to manage conditional rendering. 
 
-        } catch (error) {
+        } catch (error) { // catches any errors that occur during the fetch() call or while parsing the response. 
             console.error("Error fetching plants:", error);
         }
     }
 
-    // Use useEffect to run fetchPlants immediately after the initial render of the component
-    // This hook is used for 'side effects' such as connecting to a database/API 
 
     // Component to render each item in the FlatList
     const renderPlantItem = ({ item }) => (
@@ -112,9 +142,9 @@ export default function PlantListScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.headerText}>My Plant Collection</Text>
+            <Text style={styles.headerText}>{headerText}</Text>
 
-            {isLoading ? (
+            {isLoading ? ( // if the list's loading, then display: 
                 <Text style={styles.loadingText}>Loading plants...</Text>
             ) : error ? (
                 <Text style={styles.errorText}>{error}</Text>
@@ -140,7 +170,7 @@ export default function PlantListScreen({ navigation }) {
 const styles = StyleSheet.create({
 
     buttons: {
-        width: "100%",
+        width: "95%",
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#d46c35",
@@ -161,7 +191,7 @@ const styles = StyleSheet.create({
     },
     flatlist: {
         flex: 1,
-        width: '100%'
+        width: '95%'
 
     },
     container: {
@@ -189,9 +219,7 @@ const styles = StyleSheet.create({
         borderLeftColor: "#d46c35",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.5,
-        elevation: 2,
+        shadowOpacity: 0.3,
     },
     plantName: {
         fontSize: 18,
@@ -212,7 +240,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 20,
         fontSize: 16,
-        color: '#E74C3C',
+        color: '#ff1900ff',
     },
     errorText: {
         textAlign: 'center',

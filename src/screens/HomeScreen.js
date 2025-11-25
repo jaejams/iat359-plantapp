@@ -36,8 +36,11 @@ export default function HomeScreen({ navigation }) {
         try {
             const docRef = await addDoc(collection(db, "plants"), {
                 name,
+                nameLower: name.toLowerCase(), // pass one more object that enables filtering with any cases. 
                 type,
+                typeLower: type.toLowerCase(),
                 location,
+                locationLower: location.toLowerCase(),
                 dateAdded: serverTimestamp(),     // New field as task #5
             });
             console.log("Document written with ID: ", docRef.id);
@@ -57,9 +60,11 @@ export default function HomeScreen({ navigation }) {
     // Filter plants based on name, type, or location
     async function filterPlants() {
         const filters = {};
-        if (filterName) filters.name = filterName;
-        if (filterType) filters.type = filterType;
-        if (filterLocation) filters.location = filterLocation;
+
+        // ensure that filter's in lowercase before passing it. 
+        if (filterName) filters.name = filterName.toLowerCase();
+        if (filterType) filters.type = filterType.toLowerCase();
+        if (filterLocation) filters.location = filterLocation.toLowerCase();
 
         if (Object.keys(filters).length === 0) {
             Toast.error('Please enter at least one filter category.');
@@ -155,7 +160,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     input: {
-        width: "90%",
+        width: "95%",
         height: 50,
         borderWidth: 1,
         borderColor: "#B0BEC5",
@@ -166,7 +171,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     buttons: {
-        width: "90%",
+        width: "95%",
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#d46c35",
@@ -189,7 +194,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         flexWrap: "wrap",
         justifyContent: "space-between",
-        width: "90%",
+        width: "95%",
     },
     filterInputs: {
         width: "32%",
