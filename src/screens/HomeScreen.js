@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { collection, addDoc, serverTimestamp} from "firebase/firestore";
 import { db } from "../firebaseConfig.js";
+import { MaterialIcons } from '@expo/vector-icons';
 import ToastManager, { Toast } from 'toastify-react-native' 
 
 
